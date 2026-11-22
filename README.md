@@ -1,30 +1,38 @@
-# PharmacyCareers starter website
+# PharmacyCareers v2 (Supabase-connected static website)
 
-This is a responsive, front-end MVP for PharmacyCareers.
+## Files
+- `index.html`: responsive public website, job search, job details/share, recruiter submission, administrator login and dashboard.
+- `config.js`: public Supabase project URL and publishable key placeholders.
+- `supabase-v2-migration.sql`: grants and RLS policy setup for the tables created in the current PharmacyCareers Supabase project.
+- `supabase-schema.sql`: original starter schema reference. Do not rerun it on the already-created project.
 
-## Run locally
-Open `index.html` in a modern browser. No build step or paid API is required.
+## Configure before deploying
+1. Open `config.js` in a text editor.
+2. Replace `PASTE_YOUR_SUPABASE_PROJECT_URL_HERE` with the base project URL, e.g. `https://<project-ref>.supabase.co` (do not include `/rest/v1/`).
+3. Replace `PASTE_YOUR_SB_PUBLISHABLE_KEY_HERE` with the `sb_publishable_...` key from Supabase Settings > API Keys.
+4. Save the file. The publishable key is intended for browser use when RLS is correctly configured. Never put a Supabase secret key, service-role key, database password, or user password in `config.js`.
 
-## Important limitation
-This package is a browser-only prototype, not a production recruitment system. Job submissions are stored in the current browser's localStorage. They are not sent to a central database. The site intentionally has no fake vacancies and shows an empty state until approved jobs exist. There is no secure admin authentication in this version. Do not treat browser-side storage or hidden UI as access control.
+## Database setup
+The user already created `admin_users`, `jobs`, `job_submissions`, and `public.is_admin()` and registered their admin user. Run `supabase-v2-migration.sql` in the SQL Editor of that same Mumbai project. It grants the required Data API privileges and refreshes RLS policies. Do not run the original `supabase-schema.sql` again.
 
-## Free deployment
-You can publish the static front end using a free static hosting tier such as GitHub Pages or Cloudflare Pages. Connect a repository containing `index.html` and publish the root directory. Add your own domain later if desired.
+Expected table columns used by the website:
+- `jobs`: `id`, `company_name`, `job_title`, `category`, `location`, `experience`, `qualification`, `employment_type`, `work_mode`, `description`, `application_deadline`, `application_url`, `status`, `employer_verified`, `posted_at`, `created_at`.
+- `job_submissions`: same job fields plus `recruiter_email`, `status`, `submitted_at`.
+- `admin_users`: `user_id`, `created_at`.
 
-## Production upgrade required before accepting real recruiter submissions
-Use a managed backend such as Supabase (free tier subject to provider limits):
-1. Create `jobs`, `categories`, `companies`, `profiles` tables.
-2. Enable Supabase Auth. Create administrator accounts manually; never hard-code credentials.
-3. Configure Row Level Security (RLS): anonymous users can insert pending submissions only; public users can read approved, non-expired jobs; only authenticated admin-role users can approve, reject, edit, verify or delete.
-4. Validate application URLs server-side, rate-limit submissions, add CAPTCHA/abuse protection, and log moderation actions.
-5. Store recruiter contact details privately; do not expose recruiter email in public job JSON.
-6. Add server-side expiry handling and audit trail. Verify employer identity and the official application URL before marking a job verified.
-7. Replace the demo form's localStorage handler with a Supabase Edge Function or secured API endpoint. Never put a service-role key in browser code.
+## Deploy to the existing Cloudflare Pages project
+1. Configure `config.js` locally before uploading.
+2. In the GitHub `pharmacycareers` repository, upload/replace `index.html`, `config.js`, `README.md`, and `supabase-v2-migration.sql` in the repository root.
+3. Commit the changes. Cloudflare Pages should automatically build/deploy from the connected `main` branch. No build command is required; output directory is `/` (repository root).
+4. Open the deployed site and test job loading and a recruiter submission.
+5. Open `/#admin`, sign in using the Supabase Auth user created earlier, and confirm the account exists in `public.admin_users`.
 
-## Before launch
-- Replace `hello@pharmacycareers.in` with a monitored address you control.
-- Publish reviewed Privacy Policy, Terms and Conditions, and Disclaimer content.
-- Add a real logo, favicon, canonical URL, sitemap.xml and robots.txt.
-- Test all flows on mobile and desktop.
-- Add real jobs only after checking the employer and application link.
-- Configure Open Graph image metadata with a hosted preview image.
+## Current functionality
+- Public job cards load only approved, unexpired rows from Supabase.
+- Recruiter submissions are inserted into `job_submissions` with `pending` status. Recruiter email is not returned to public visitors.
+- Admin login uses Supabase Auth password authentication and checks the signed-in user against `admin_users`.
+- Admin can approve/reject submissions, add/edit/delete jobs, and toggle the employer-verified flag.
+- Job detail modal and share action are included. Share uses the browser share sheet when available, otherwise LinkedIn's share page.
+
+## Production hardening still required
+This is a functional MVP, not a fully audited recruitment system. Before broad public promotion, add CAPTCHA/anti-spam and server-side rate limiting (prefer a Supabase Edge Function for public submissions), server-side URL/domain and employer validation, moderation audit logs, a proper password reset flow, reviewed privacy/terms pages, backups, and accessibility/security testing. An administrator should independently verify every employer and application destination before approving or marking a listing verified. No sample vacancies are seeded.
