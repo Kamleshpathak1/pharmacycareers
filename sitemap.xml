@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://www.pharmacycareers.in/</loc>
-  </url>
+  <url><loc>https://www.pharmacycareers.in/</loc></url>
+  <url><loc>https://www.pharmacycareers.in/resources/pharmacy-career-pathways-india/</loc></url>
+  <url><loc>https://www.pharmacycareers.in/resources/build-strong-pharmacy-resume/</loc></url>
+  <url><loc>https://www.pharmacycareers.in/resources/pharmacovigilance-interview-questions/</loc></url>
+  <url><loc>https://www.pharmacycareers.in/resources/starting-medical-writing-career/</loc></url>
+  <url><loc>https://www.pharmacycareers.in/resources/pharma-interview-preparation/</loc></url>
+  <url><loc>https://www.pharmacycareers.in/resources/pharmaceutical-industry-insights/</loc></url>
 </urlset>
