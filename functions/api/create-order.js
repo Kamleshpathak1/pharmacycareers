@@ -1,26 +1,30 @@
 export async function onRequestPost({ request, env }) {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "https://www.pharmacycareers.in",
+  const origin = "https://www.pharmacycareers.in";
+
+  const headers = {
+    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "POST, OPTIONS"
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json"
   };
 
   const respond = (data, status = 200) =>
-    new Response(JSON.stringify(data), {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    new Response(JSON.stringify(data), { status, headers });
 
   try {
-    const authHeader = request.headers.get("Authorization");
+    if (request.headers.get("Origin") !== origin) {
+      return respond({ error: "Invalid origin" }, 403);
+    }
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    const auth = request.headers.get("Authorization");
+
+    if (!auth?.startsWith("Bearer ")) {
       return respond({ error: "Login required" }, 401);
     }
 
-    const token = authHeader.substring(7);
+    const token = auth.slice(7);
 
-    const userResponse = await fetch(
+    const userRes = await fetch(
       `${env.SUPABASE_URL}/auth/v1/user`,
       {
         headers: {
@@ -30,44 +34,122 @@ export async function onRequestPost({ request, env }) {
       }
     );
 
-    if (!userResponse.ok) {
-      return respond({ error: "Invalid student session" }, 401);
+    if (!userRes.ok) {
+      return respond({ error: "Invalid session" }, 401);
     }
 
-    const user = await userResponse.json();
-    const { material_id } = await request.json();
+    const user = await userRes.json();
+    const body = await request.json();
+    const materialId = body.material_id;
 
-    if (!material_id) {
+    if (!materialId) {
       return respond({ error: "Material ID required" }, 400);
     }
 
-    const materialResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/learning_materials?id=eq.${encodeURIComponent(material_id)}&is_published=eq.true&select=id,title,access_type,price_paise,currency`,
-      {
-        headers: {
-          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
-        }
-      }
+    const dbHeaders = {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json"
+    };
+
+    const materialRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/learning_materials?id=eq.${encodeURIComponent(materialId)}&is_published=eq.true&select=id,title,access_type,price_paise,currency`,
+      { headers: dbHeaders }
     );
 
-    if (!materialResponse.ok) {
-      return respond({ error: "Unable to verify material" }, 500);
+    if (!materialRes.ok) {
+      return respond({ error: "Material lookup failed" }, 500);
     }
 
-    const materials = await materialResponse.json();
+    const materials = await materialRes.json();
     const material = materials[0];
 
     if (!material || material.access_type !== "paid") {
-      return respond({ error: "Paid material not found" }, 404);
+      return respond({ error: "Paid material unavailable" }, 404);
     }
 
-    if (!Number.isSafeInteger(material.price_paise) ||
-        material.price_paise <= 0) {
+    if (
+      !Number.isSafeInteger(material.price_paise) ||
+      material.price_paise <= 0 ||
+      material.currency !== "INR"
+    ) {
       return respond({ error: "Invalid material price" }, 400);
     }
 
-    const orderResponse = await fetch(
+    const existingRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/purchases?user_id=eq.${user.id}&material_id=eq.${material.id}&select=id,status`,
+      { headers: dbHeaders }
+    );
+
+    if (!existingRes.ok) {
+      return respond({ error: "Purchase lookup failed" }, 500);
+    }
+
+    const existing = (await existingRes.json())[0];
+
+    if (existing?.status === "paid") {
+      return respond({ error: "Material already purchased" }, 409);
+    }
+
+    let purchaseId;
+
+    if (existing) {
+      purchaseId = existing.id;
+
+      const resetRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/purchases?id=eq.${purchaseId}&user_id=eq.${user.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            ...dbHeaders,
+            Prefer: "return=minimal"
+          },
+          body: JSON.stringify({
+            status: "pending",
+            amount_paise: material.price_paise,
+            currency: "INR",
+            paid_at: null
+          })
+        }
+      );
+
+      if (!resetRes.ok) {
+        return respond({ error: "Purchase preparation failed" }, 500);
+      }
+    } else {
+      const purchaseRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/purchases`,
+        {
+          method: "POST",
+          headers: {
+            ...dbHeaders,
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            material_id: material.id,
+            amount_paise: material.price_paise,
+            currency: "INR",
+            status: "pending"
+          })
+        }
+      );
+
+      if (!purchaseRes.ok) {
+        return respond({ error: "Purchase creation failed" }, 500);
+      }
+
+      const purchases = await purchaseRes.json();
+      purchaseId = purchases[0]?.id;
+
+      if (!purchaseId) {
+        return respond({ error: "Purchase creation failed" }, 500);
+      }
+    }
+
+    const receipt = `pc_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
+
+    const orderRes = await fetch(
       "https://api.razorpay.com/v1/orders",
       {
         method: "POST",
@@ -79,20 +161,44 @@ export async function onRequestPost({ request, env }) {
         },
         body: JSON.stringify({
           amount: material.price_paise,
-          currency: material.currency || "INR",
-          receipt: `pc_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
+          currency: "INR",
+          receipt,
           notes: {
             user_id: user.id,
-            material_id: material.id
+            material_id: material.id,
+            purchase_id: purchaseId
           }
         })
       }
     );
 
-    const order = await orderResponse.json();
+    const order = await orderRes.json();
 
-    if (!orderResponse.ok) {
-      return respond({ error: "Payment order creation failed" }, 502);
+    if (!orderRes.ok || !order.id) {
+      return respond({ error: "Razorpay order creation failed" }, 502);
+    }
+
+    const transactionRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/payment_transactions`,
+      {
+        method: "POST",
+        headers: {
+          ...dbHeaders,
+          Prefer: "return=minimal"
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          purchase_id: purchaseId,
+          razorpay_order_id: order.id,
+          amount_paise: material.price_paise,
+          currency: "INR",
+          status: "created"
+        })
+      }
+    );
+
+    if (!transactionRes.ok) {
+      return respond({ error: "Payment record creation failed" }, 500);
     }
 
     return respond({
@@ -104,7 +210,7 @@ export async function onRequestPost({ request, env }) {
     });
 
   } catch (error) {
-    return respond({ error: "Server error" }, 500);
+    return respond({ error: "Internal server error" }, 500);
   }
 }
 
