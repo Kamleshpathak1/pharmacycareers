@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Student learning portal at PharmacyCareers. Explore pharmacy, pharmacovigilance and medical writing resources.">
+  <title>Student Portal | PharmacyCareers</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+
+  <style>
+    :root {
+      --primary: #087f70;
+      --primary-dark: #06685c;
+      --background: #f5f8fa;
+      --text: #18313b;
+      --muted: #647783;
+      --border: #e1e9ed;
+      --white: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 5%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .brand {
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      margin-left: 16px;
+      font-size: 14px;
+    }
+
+    .container {
+      max-width: 1050px;
+      margin: 35px auto;
+      padding: 0 18px;
+    }
+
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 25px;
+      box-shadow: 0 5px 18px rgba(20, 50, 60, .04);
+    }
+
+    .auth-card {
+      max-width: 430px;
+      margin: 35px auto;
+    }
+
+    h1, h2 { margin-top: 0; }
+
+    .muted { color: var(--muted); }
+
+    label {
+      display: block;
+      margin: 15px 0 7px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 15px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 7px;
+      padding: 12px 17px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .primary-btn {
+      background: var(--primary);
+      color: white;
+    }
+
+    .primary-btn:hover { background: var(--primary-dark); }
+
+    .full-width {
+      width: 100%;
+      margin-top: 18px;
+    }
+
+    .secondary-btn {
+      background: #eaf4f2;
+      color: var(--primary-dark);
+    }
+
+    .link-btn {
+      background: transparent;
+      color: var(--primary);
+      padding: 8px 0;
+    }
+
+    .message {
+      margin-top: 15px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .error { color: #b42318; }
+    .success { color: #087443; }
+
+    .hidden { display: none !important; }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 25px;
+    }
+
+    .materials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+      margin-top: 22px;
+    }
+
+    .material-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 20px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 20px;
+      background: #e5f5ef;
+      color: #087443;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .badge.paid {
+      background: #fff2d9;
+      color: #925d00;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 30px 15px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 14px 18px; }
+      nav a { margin-left: 9px; }
+      .container { margin-top: 22px; }
+      .card { padding: 20px; }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <a class="brand" href="/">PharmacyCareers</a>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/#resources">Resources</a>
+  </nav>
+</header>
+
+<main class="container">
+
+  <section id="authSection" class="card auth-card">
+    <h1 id="authTitle">Student Login</h1>
+    <p class="muted" id="authDescription">
+      Sign in to access your PharmacyCareers learning portal.
+    </p>
+
+    <form id="authForm">
+      <div id="nameField" class="hidden">
+        <label for="studentName">Full name</label>
+        <input id="studentName" type="text" autocomplete="name">
+      </div>
+
+      <label for="email">Email address</label>
+      <input id="email" type="email" required autocomplete="email">
+
+      <label for="password">Password</label>
+      <input id="password" type="password" required minlength="8"
+        autocomplete="current-password">
+
+      <button class="primary-btn full-width" id="submitBtn" type="submit">
+        Login
+      </button>
+    </form>
+
+    <p id="authMessage" class="message" role="status"></p>
+
+    <p id="toggleText" class="muted">
+      New student?
+      <button class="link-btn" id="toggleAuth" type="button">
+        Create an account
+      </button>
+    </p>
+  </section>
+
+  <section id="dashboardSection" class="hidden">
+    <div class="dashboard-header">
+      <div>
+        <h1>Student Dashboard</h1>
+        <p class="muted" id="welcomeMessage">Welcome to PharmacyCareers.</p>
+      </div>
+      <button class="secondary-btn" id="logoutBtn">Logout</button>
+    </div>
+
+    <div class="card">
+      <h2>Learning Library</h2>
+      <p class="muted">
+        Explore available pharmacy and life-sciences learning materials.
+      </p>
+      <div id="materialsMessage" class="message" role="status">
+        Loading learning materials...
+      </div>
+      <div id="materialsGrid" class="materials-grid"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  © <span id="year"></span> PharmacyCareers. All rights reserved.
+</footer>
+
+<script>
+  /*
+    CONFIGURATION CONNECTION
+
+    This page expects config.js to expose:
+    window.SUPABASE_URL
+    window.SUPABASE_ANON_KEY
+
+    We will map these to your existing config.js format
+    after checking its redacted contents.
+  */
+
+  const SUPABASE_URL = window.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY;
+
+  const authSection = document.getElementById("authSection");
+  const dashboardSection = document.getElementById("dashboardSection");
+  const authForm = document.getElementById("authForm");
+  const authMessage = document.getElementById("authMessage");
+
+  let supabaseClient;
+  let isRegisterMode = false;
+
+  document.getElementById("year").textContent =
+    new Date().getFullYear();
+
+  function showMessage(element, message, type = "") {
+    element.textContent = message;
+    element.className = "message " + type;
+  }
+
+  function showAuth() {
+    authSection.classList.remove("hidden");
+    dashboardSection.classList.add("hidden");
+  }
+
+  function showDashboard(user) {
+    authSection.classList.add("hidden");
+    dashboardSection.classList.remove("hidden");
+
+    document.getElementById("welcomeMessage").textContent =
+      "Welcome, " + (user.email || "Student") + ".";
+
+    loadMaterials();
+  }
+
+  function setRegisterMode(register) {
+    isRegisterMode = register;
+
+    document.getElementById("authTitle").textContent =
+      register ? "Student Registration" : "Student Login";
+
+    document.getElementById("authDescription").textContent =
+      register
+        ? "Create your PharmacyCareers student account."
+        : "Sign in to access your learning portal.";
+
+    document.getElementById("nameField").classList.toggle(
+      "hidden", !register
+    );
+
+    document.getElementById("studentName").required = register;
+
+    document.getElementById("submitBtn").textContent =
+      register ? "Create Account" : "Login";
+
+    document.getElementById("toggleText").innerHTML = register
+      ? 'Already registered? <button class="link-btn" id="toggleAuth" type="button">Login</button>'
+      : 'New student? <button class="link-btn" id="toggleAuth" type="button">Create an account</button>';
+
+    document.getElementById("toggleAuth").addEventListener(
+      "click", () => setRegisterMode(!isRegisterMode)
+    );
+
+    authMessage.textContent = "";
+  }
+
+  document.getElementById("toggleAuth").addEventListener(
+    "click", () => setRegisterMode(true)
+  );
+
+  authForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    const fullName = document.getElementById("studentName").value.trim();
+
+    const submitBtn = document.getElementById("submitBtn");
+    submitBtn.disabled = true;
+
+    try {
+      if (isRegisterMode) {
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName }
+          }
+        });
+
+        if (error) throw error;
+
+        if (data.session) {
+          showMessage(authMessage, "Registration successful.", "success");
+          showDashboard(data.user);
+        } else {
+          showMessage(
+            authMessage,
+            "Registration received. Please check your email to confirm your account.",
+            "success"
+          );
+        }
+
+      } else {
+        const { data, error } =
+          await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+          });
+
+        if (error) throw error;
+
+        showMessage(authMessage, "Login successful.", "success");
+        showDashboard(data.user);
+      }
+
+    } catch (error) {
+      showMessage(authMessage, error.message, "error");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener(
+    "click", async () => {
+      const { error } = await supabaseClient.auth.signOut();
+
+      if (error) {
+        alert("Logout failed. Please try again.");
+        return;
+      }
+
+      showAuth();
+      authForm.reset();
+      setRegisterMode(false);
+    }
+  );
+
+  async function loadMaterials() {
+    const grid = document.getElementById("materialsGrid");
+    const message = document.getElementById("materialsMessage");
+
+    grid.innerHTML = "";
+    message.textContent = "Loading learning materials...";
+
+    const { data, error } = await supabaseClient
+      .from("learning_materials")
+      .select("id, title, description, content_type, access_type, price_paise, currency")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      message.textContent =
+        "Unable to load materials. Please try again later.";
+      console.error("Learning materials error:", error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      message.textContent =
+        "No learning materials are currently published.";
+      return;
+    }
+
+    message.textContent = "";
+
+    data.forEach((material) => {
+      const isFree = material.access_type === "free";
+
+      const card = document.createElement("article");
+      card.className = "material-card";
+
+      const badge = document.createElement("span");
+      badge.className = "badge" + (isFree ? "" : " paid");
+      badge.textContent = isFree
+        ? "Free"
+        : "Paid";
+
+      const title = document.createElement("h3");
+      title.textContent = material.title || "Learning Material";
+
+      const description = document.createElement("p");
+      description.className = "muted";
+      description.textContent = material.description || "";
+
+      const type = document.createElement("p");
+      type.className = "muted";
+      type.textContent = "Format: " + (material.content_type || "Resource");
+
+      card.append(badge, title, description, type);
+
+      if (!isFree) {
+        const price = document.createElement("p");
+        price.textContent =
+          material.currency + " " +
+          (Number(material.price_paise || 0) / 100).toFixed(2);
+
+        card.appendChild(price);
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  async function initializePortal() {
+    if (!window.supabase || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      showMessage(
+        authMessage,
+        "Supabase configuration is not connected yet. Please contact the website administrator.",
+        "error"
+      );
+
+      document.getElementById("submitBtn").disabled = true;
+      return;
+    }
+
+    supabaseClient = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+    const { data, error } =
+      await supabaseClient.auth.getSession();
+
+    if (error) {
+      showMessage(authMessage, "Unable to check login session.", "error");
+      return;
+    }
+
+    if (data.session) {
+      showDashboard(data.session.user);
+    } else {
+      showAuth();
+    }
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        showDashboard(session.user);
+      }
+
+      if (event === "SIGNED_OUT") {
+        showAuth();
+      }
+    });
+  }
+
+  initializePortal();
+</script>
+
+</body>
+</html>
