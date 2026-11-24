@@ -177,3 +177,4 @@ function legal(t){document.getElementById('legalTitle').textContent=t;const copy
 async function init(){if(!configReady){showJobsError('The Supabase project URL and publishable key still need to be added to config.js.');return}await loadPublicJobs();const {data:{session}}=await supabaseClient.auth.getSession();if(session&&await verifyAdmin()){document.getElementById('admin').classList.remove('hidden');document.getElementById('adminWelcome').textContent=`Signed in: ${currentUser.email}`;await loadAdminData()}}
 init();
 </script></body></html>
+<!-- Payment integration preparation -->
