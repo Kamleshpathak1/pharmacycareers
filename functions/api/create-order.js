@@ -24,15 +24,12 @@ export async function onRequestPost({ request, env }) {
 
     const token = auth.slice(7);
 
-    const userRes = await fetch(
-      `${env.SUPABASE_URL}/auth/v1/user`,
-      {
-        headers: {
-          apikey: env.SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${token}`
-        }
+    const userRes = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`
       }
-    );
+    });
 
     if (!userRes.ok) {
       return respond({ error: "Invalid session" }, 401);
@@ -61,8 +58,7 @@ export async function onRequestPost({ request, env }) {
       return respond({ error: "Material lookup failed" }, 500);
     }
 
-    const materials = await materialRes.json();
-    const material = materials[0];
+    const material = (await materialRes.json())[0];
 
     if (!material || material.access_type !== "paid") {
       return respond({ error: "Paid material unavailable" }, 404);
@@ -86,12 +82,11 @@ export async function onRequestPost({ request, env }) {
     }
 
     const existing = (await existingRes.json())[0];
+    let purchaseId;
 
     if (existing?.status === "paid") {
       return respond({ error: "Material already purchased" }, 409);
     }
-
-    let purchaseId;
 
     if (existing) {
       purchaseId = existing.id;
@@ -147,30 +142,59 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    // Reuse an existing unpaid Razorpay order when its amount matches.
+    const pendingRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/payment_transactions?purchase_id=eq.${purchaseId}&status=eq.created&select=razorpay_order_id,amount_paise,currency`,
+      { headers: dbHeaders }
+    );
+
+    if (!pendingRes.ok) {
+      return respond({ error: "Pending payment lookup failed" }, 500);
+    }
+
+    const pendingTransactions = await pendingRes.json();
+    const pendingTransaction = pendingTransactions[0];
+
+    if (pendingTransaction) {
+      if (
+        pendingTransaction.amount_paise !== material.price_paise ||
+        pendingTransaction.currency !== material.currency
+      ) {
+        return respond({
+          error: "An earlier payment order exists with a different amount. Please contact support."
+        }, 409);
+      }
+
+      return respond({
+        order_id: pendingTransaction.razorpay_order_id,
+        amount: pendingTransaction.amount_paise,
+        currency: pendingTransaction.currency,
+        key_id: env.RAZORPAY_KEY_ID,
+        material_title: material.title
+      });
+    }
+
     const receipt = `pc_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
 
-    const orderRes = await fetch(
-      "https://api.razorpay.com/v1/orders",
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Basic " + btoa(
-            `${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`
-          ),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          amount: material.price_paise,
-          currency: "INR",
-          receipt,
-          notes: {
-            user_id: user.id,
-            material_id: material.id,
-            purchase_id: purchaseId
-          }
-        })
-      }
-    );
+    const orderRes = await fetch("https://api.razorpay.com/v1/orders", {
+      method: "POST",
+      headers: {
+        Authorization: "Basic " + btoa(
+          `${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`
+        ),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount: material.price_paise,
+        currency: "INR",
+        receipt,
+        notes: {
+          user_id: user.id,
+          material_id: material.id,
+          purchase_id: purchaseId
+        }
+      })
+    });
 
     const order = await orderRes.json();
 
